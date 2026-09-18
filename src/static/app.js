@@ -3,6 +3,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const loginButton = document.getElementById("login-button");
+  const logoutButton = document.getElementById("logout-button");
+  const loginDialog = document.getElementById("login-dialog");
+  const loginForm = document.getElementById("login-form");
+  const loginPrompt = document.getElementById("login-prompt");
+  const teacherStatus = document.getElementById("teacher-status");
+  let authToken = null;
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -12,6 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -29,8 +37,11 @@ document.addEventListener("DOMContentLoaded", () => {
               <ul class="participants-list">
                 ${details.participants
                   .map(
-                    (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                    (email) => `<li><span class="participant-email">${email}</span>${
+                      authToken
+                        ? `<button class="delete-btn" data-activity="${name}" data-email="${email}" aria-label="Unregister ${email}">Remove</button>`
+                        : ""
+                    }</li>`
                   )
                   .join("")}
               </ul>
@@ -80,6 +91,7 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/unregister?email=${encodeURIComponent(email)}`,
         {
           method: "DELETE",
+          headers: { Authorization: `Bearer ${authToken}` },
         }
       );
 
@@ -124,6 +136,7 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/signup?email=${encodeURIComponent(email)}`,
         {
           method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` },
         }
       );
 
@@ -155,6 +168,59 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  loginButton.addEventListener("click", () => loginDialog.showModal());
+
+  document.getElementById("cancel-login").addEventListener("click", () => {
+    loginDialog.close();
+    loginForm.reset();
+  });
+
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const response = await fetch("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: document.getElementById("username").value,
+        password: document.getElementById("password").value,
+      }),
+    });
+
+    if (!response.ok) {
+      messageDiv.textContent = "Invalid teacher credentials.";
+      messageDiv.className = "error";
+      messageDiv.classList.remove("hidden");
+      return;
+    }
+
+    const result = await response.json();
+    authToken = result.token;
+    loginButton.classList.add("hidden");
+    logoutButton.classList.remove("hidden");
+    teacherStatus.textContent = `Signed in as ${result.username}`;
+    teacherStatus.classList.remove("hidden");
+    loginPrompt.classList.add("hidden");
+    signupForm.classList.remove("hidden");
+    loginDialog.close();
+    loginForm.reset();
+    fetchActivities();
+  });
+
+  logoutButton.addEventListener("click", async () => {
+    await fetch("/auth/logout", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    authToken = null;
+    loginButton.classList.remove("hidden");
+    logoutButton.classList.add("hidden");
+    teacherStatus.classList.add("hidden");
+    loginPrompt.classList.remove("hidden");
+    signupForm.classList.add("hidden");
+    fetchActivities();
+  });
+
   // Initialize app
+  signupForm.classList.add("hidden");
   fetchActivities();
 });
